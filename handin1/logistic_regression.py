@@ -16,7 +16,8 @@ def logistic(z):
     logi = np.zeros(z.shape)
 
     ### YOUR CODE HERE
-    logi = np.where(1/(1+np.exp(-z)) > 0, 1/(1+np.exp(-z)), 2.2250738585072014e-308)  # smallest float in python
+    logi = np.where(1/(1+np.exp(-z)) > 0, 1/(1+np.exp(-z)), 2.2250738585072014e-308)
+    # To reduce numerical issues: Use the smallest float in python, if 1/(1+np.exp(-z)) is evaluated to 0
     ### END CODE
 
     assert logi.shape == z.shape
@@ -47,9 +48,9 @@ class LogisticRegressionClassifier():
         grad = np.zeros(w.shape)
 
         ### YOUR CODE HERE
-        cost = np.mean(-np.log(logistic(y * np.matmul(X, w))))
-        grad = np.matmul(X.T, -y * logistic(- y * np.matmul(X, w)))/y.shape[0]
-        #grad = np.matmul(X.T, -y * logistic(- y * np.matmul(X, w)))
+        # We are using the formulas given in the slides (GradientDescent.pdf)
+        cost = np.mean(-np.log(logistic(y * np.matmul(X, w))))   # formula from slide 5/40
+        grad = np.matmul(X.T, -y * logistic(- y * np.matmul(X, w)))/y.shape[0]  # formula from slide 11/40
         ### END CODE
 
         assert grad.shape == w.shape
@@ -81,14 +82,20 @@ class LogisticRegressionClassifier():
 
         ### YOUR CODE HERE
         for epoch in range(epochs):
-            xy = np.random.permutation(np.concatenate((X, y.reshape(y.shape[0], 1)), axis=1)) # Concatenation, so X and y get shuffled in the same way
+            # Permute X and y randomly
+            # (Concatenation, so X_i and y_i always stay in the same line together)
+            xy = np.random.permutation(np.concatenate((X, y.reshape(y.shape[0], 1)), axis=1))
             X = xy[:, :-1]
             y = xy[:, -1]
+
+            # For each batch, compute the cost and the new w
             for i in range(int(X.shape[0]/batch_size)):
                 cost, g = self.cost_grad(X[i * batch_size:(i+1) * batch_size, :], y[i * batch_size:(i+1) * batch_size], w)
                 w = w - lr * g
             history.append(self.cost_grad(X, y, w)[0])
             print("Cost after epoch", epoch+1, " :", self.cost_grad(X, y, w)[0])
+
+            # Reduce learning rate every 20 epochs
             if epoch % 20 == 0:
                 lr = lr * 0.75
         ### END CODE
@@ -116,7 +123,7 @@ class LogisticRegressionClassifier():
         return out
     
     def score(self, X, y):
-        """ Compute model accuracy  on Data X with labels y
+        """ Compute model accuracy on Data X with labels y
 
         Args:
             X: np.array shape (n,d) dtype float - Features 
@@ -130,6 +137,7 @@ class LogisticRegressionClassifier():
 
         ### YOUR CODE HERE
         s = np.mean(np.isclose(y, self.predict(X), rtol=1e-08, atol=0.0))
+        # Using the np.isclose() function to reduce the errors caused by the numerical issues
         ### END CODE
 
         return s
