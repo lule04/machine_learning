@@ -25,10 +25,14 @@ def softmax(X):
     res = np.zeros(X.shape)
 
     ### YOUR CODE HERE
-    max_x = np.max(X, axis=1)    # maxima of each row
-    log_sum = np.log(np.sum(np.exp(X - max_x, axis=1))) + max_x
-    log_softmax = X - log_sum
+    # Just follow the steps described in the description:
+    max_x = np.max(X, axis=1, keepdims=True)
+    log_sum_exp = np.log(np.sum(np.exp(X - max_x), axis=1, keepdims=True)) + max_x
+    log_softmax = X - log_sum_exp
     res = np.exp(log_softmax)
+    # If still 0, even after having done all the things above to avoid numerical issues,
+    # then set to the smallest float in python
+    res = np.where(res > 0, res, 2.2250738585072014e-308)
     ### END CODE
 
     return res
@@ -67,8 +71,11 @@ class SoftmaxClassifier():
         """
         cost = np.nan
         grad = np.zeros(W.shape)*np.nan
-        Yk = one_in_k_encoding(y, self.num_classes) # may help - otherwise you may remove it
+        Yk = one_in_k_encoding(y.astype(int), self.num_classes)  # Cast y to int-array!!!
         ### YOUR CODE HERE
+        # We are using the formulas given in the slides (Softmax.pdf)
+        cost = -np.mean(np.log((softmax(np.matmul(X, W)) * Yk).sum(axis=1)))    # formula from slide 22/28 (with Yk)
+        grad = -np.matmul(X.T, Yk-softmax(np.matmul(X, W)))/X.shape[0]   # formula from slide 23/28 (with Yk)
         ### END CODE
         return cost, grad
 
@@ -92,7 +99,27 @@ class SoftmaxClassifier():
         """
         if W is None: W = np.zeros((X.shape[1], self.num_classes))
         history = []
+
         ### YOUR CODE HERE
+        # Basically the same as in logistic regression:
+        for epoch in range(epochs):
+            # Permute X and y randomly
+            # (Concatenation, so X_i and y_i always stay in the same line together)
+            xy = np.random.permutation(np.concatenate((X, Y.reshape(Y.shape[0], 1)), axis=1))
+            X = xy[:, :-1]
+            Y = xy[:, -1]
+
+            # For each batch, compute the cost and the new w
+            for i in range(int(X.shape[0]/batch_size)):
+                cost, g = self.cost_grad(X[i * batch_size:(i+1) * batch_size, :], Y[i * batch_size:(i+1) * batch_size], W)
+                W = W - lr * g
+
+            history.append(self.cost_grad(X, Y, W)[0])
+            print("Cost after epoch", epoch+1, " :", self.cost_grad(X, Y, W)[0])
+
+            # Reduce learning rate every 20 epochs
+            if epoch % 20 == 0:
+                lr = lr * 0.75
         ### END CODE
         self.W = W
         self.history = history
@@ -109,6 +136,7 @@ class SoftmaxClassifier():
         """
         out = 0
         ### YOUR CODE HERE
+        out = np.mean(np.equal(Y, self.predict(X)))
         ### END CODE
         return out
 
@@ -121,10 +149,11 @@ class SoftmaxClassifier():
            out: np.array shape (n, ) - prediction on each data point (number in 0,1,..., num_classes-1)
         """
         out = None
-        ### YOUR CODE HERE   
+        ### YOUR CODE HERE
+        # Return the class (=index of a line) with the maximum score for each x_i
+        out = np.argmax(softmax(np.matmul(X, self.W)), axis=1)
         ### END CODE
         return out
-
 
 
 def test_encoding():
