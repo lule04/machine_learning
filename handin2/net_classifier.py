@@ -85,15 +85,15 @@ def get_init_params(input_dim, hidden_size, output_size):
     Returns:
        dict of randomly initialized parameter matrices.
     """
-    W1 = np.random.normal(0, np.sqrt(2./(input_dim+hidden_size)), size=(input_dim, hidden_size))
+    W1 = np.random.normal(0, np.sqrt(2. / (input_dim + hidden_size)), size=(input_dim, hidden_size))
     b1 = np.zeros((1, hidden_size))
-    W2 = np.random.normal(0, np.sqrt(4./(hidden_size+output_size)), size=(hidden_size, output_size))
+    W2 = np.random.normal(0, np.sqrt(4. / (hidden_size + output_size)), size=(hidden_size, output_size))
     b2 = np.zeros((1, output_size))
     return {'W1': W1, 'b1': b1, 'W2': W2, 'b2': b2}
 
-  
+
 class NetClassifier():
-    
+
     def __init__(self):
         """ Trivial Init """
         self.params = None
@@ -113,10 +113,14 @@ class NetClassifier():
         pred = None
 
         ### YOUR CODE HERE
+        hidden = relu(np.dot(X, params['W1']) + params['b1'])  # hidden layer with relu activation function
+        output = np.dot(hidden, params['W2']) + params['b2']  # output neurons compute the identity function
+        pred = np.argmax(output, axis=1)  # Get the index of the highest score
+        # Very helpful: Slides 13/22, 14/22 and 15/22 of FullyConnected.pdf (from lecture of 24/9)
         ### END CODE
 
         return pred
-     
+
     def score(self, X, y, params=None):
         """ Compute accuracy of model on data X with labels y (mean 0-1 loss)
         
@@ -132,9 +136,10 @@ class NetClassifier():
             params = self.params
         acc = None
         ### YOUR CODE HERE
+        acc = np.mean(np.equal(y, self.predict(X, params)))
         ### END CODE
         return acc
-    
+
     @staticmethod
     def cost_grad(X, y, params, c=0.0):
         """ Compute cost and gradient of neural net on data X with labels y using weight decay parameter c
@@ -168,16 +173,40 @@ class NetClassifier():
         d_w2 = None
         d_b1 = None
         d_b2 = None
-        labels = one_in_k_encoding(y, W2.shape[1]) # shape n x k
-                        
+        labels = one_in_k_encoding(y, W2.shape[1])  # shape n x k
+
         ### YOUR CODE HERE - FORWARD PASS - compute cost with weight decay and store relevant values for backprop
+        hidden = relu(np.dot(X, W1) + b1)  # hidden layer with relu activation function (relevant for backprop)
+        nn = np.dot(hidden, W2) + b2  # output neurons compute the identity function (relevant for backprop)
+
+        original_loss = -np.sum(labels * np.log(softmax(nn))) / X.shape[0]
+        weight_decay = c * (np.sum(W1 ** 2) + np.sum(W2 ** 2))
+        cost = original_loss + weight_decay  # Cost is the avg cross entropy loss - use the formula given in the assignment
         ### END CODE
-        
+
         ### YOUR CODE HERE - BACKWARDS PASS - compute derivatives of all weights and bias, store them in d_w1, d_w2, d_b1, d_b2
+        # Firstly, compute derivatives for output layer - use given derivative:
+        error_nn = softmax(nn) - labels
+
+        # Compute derivatives with respect to W2 and b2 by using formulas given
+        # in FullyConnected.pdf (from lecture of 27/9):
+        d_w2 = np.dot(hidden.T, error_nn) / X.shape[0] + 2 * c * W2  # Thank you slide 38/42
+        d_b2 = np.sum(error_nn, axis=0, keepdims=True) / X.shape[0]  # Thank you slide 39/42
+
+        # Then, we can compute derivatives for hidden layer
+        error_hidden = np.dot(error_nn, W2.T) * (hidden > 0)
+        # The np.dot product spreads the output error back through the weights to understand
+        # how much each hidden neuron contributed to the error at the output.
+        # (hidden > 0) ensures that only those neurons that were active contribute to the gradient
+
+        # Compute derivatives with respect to W1 and b1:
+        d_w1 = np.dot(X.T, error_hidden) / X.shape[0] + 2 * c * W1  # Thank you slide 38/42
+        d_b1 = np.sum(error_hidden, axis=0, keepdims=True) / X.shape[0]  # Thank you slide 39/42
         ### END CODE
+
         # the return signature
         return cost, {'d_w1': d_w1, 'd_w2': d_w2, 'd_b1': d_b1, 'd_b2': d_b2}
-        
+
     def fit(self, X_train, y_train, X_val, y_val, init_params, batch_size=32, lr=0.1, c=1e-4, epochs=30):
         """ Run Mini-Batch Gradient Descent on data X, Y to minimize the in sample error for Neural Net classification
         Printing the performance every epoch is a good idea to see if the algorithm is working
@@ -199,27 +228,76 @@ class NetClassifier():
            hist: dict:{keys: train_loss, train_acc, val_loss, val_acc} each an np.array of size epochs of the the given cost after every epoch
            loss is the NLL loss and acc is accuracy
         """
-        
+
         W1 = init_params['W1']
         b1 = init_params['b1']
         W2 = init_params['W2']
         b2 = init_params['b2']
         hist = {
-            'train_loss': None,
-            'train_acc': None,
-            'val_loss': None,
-            'val_acc': None, 
+            'train_loss': np.zeros(epochs),
+            'train_acc': np.zeros(epochs),
+            'val_loss': np.zeros(epochs),
+            'val_acc': np.zeros(epochs),
         }
 
-        
         ### YOUR CODE HERE
+        self.params = init_params
+
+        # Parameters needed to perform the validation:
+        best_val_acc = 0.0
+        best_params = init_params
+
+        for epoch in range(epochs):
+            # Shuffle training data randomly
+            perm = np.random.permutation(X_train.shape[0])
+            X_train = X_train[perm]
+            y_train = y_train[perm]
+
+            # Mini-batch training - Basically the same as in logistic regression or softmax in the previous hand-in
+            for i in range(0, X_train.shape[0], batch_size):
+                X_batch = X_train[i:i + batch_size]
+                y_batch = y_train[i:i + batch_size]
+
+                # Compute cost and gradient on the batch
+                cost, grads = self.cost_grad(X_batch, y_batch, {'W1': W1, 'b1': b1, 'W2': W2, 'b2': b2}, c)
+
+                # Update weights and biases
+                W1 -= lr * grads['d_w1']
+                b1 -= lr * grads['d_b1']
+                W2 -= lr * grads['d_w2']
+                b2 -= lr * grads['d_b2']
+
+            # Compute training accuracy and loss and save them
+            hist['train_loss'][epoch] = self.cost_grad(X_train, y_train, {'W1': W1, 'b1': b1, 'W2': W2, 'b2': b2})[0]
+            hist['train_acc'][epoch] = self.score(X_train, y_train, self.params)
+
+            # Compute accuracy and loss for validation as well
+            hist['val_loss'][epoch] = self.cost_grad(X_val, y_val, {'W1': W1, 'b1': b1, 'W2': W2, 'b2': b2})[0]
+            hist['val_acc'][epoch] = self.score(X_val, y_val, self.params)
+
+            # Update best_parameters if validation accuracy is the highest so far
+            if hist['val_acc'][epoch] > best_val_acc:
+                best_val_acc = hist['val_acc'][epoch]
+                best_params = {'W1': W1.copy(), 'b1': b1.copy(), 'W2': W2.copy(), 'b2': b2.copy()}  # Use copies whenever we can ...
+
+            print(f"After epoch {epoch+1}/{epochs}: "
+                  f"Train Loss: {hist['train_loss'][epoch]:.4f}, "
+                  f"Train Acc: {hist['train_acc'][epoch]:.4f}, "
+                  f"Val Loss: {hist['val_loss'][epoch]:.4f}, "
+                  f"Val Acc: {hist['val_acc'][epoch]:.4f}")
+
+            # Reduce learning rate every 20 epochs
+            if epoch % 20 == 0:
+                lr = lr * 0.75
+
+        self.params = best_params
         ### END CODE
         # hist dict should look like this with something different than none
         #hist = {'train_loss': None, 'train_acc': None, 'val_loss': None, 'val_acc': None}
         ## self.params should look like this with something better than none, i.e. the best parameters found.
         # self.params = {'W1': None, 'b1': None, 'W2': None, 'b2': None}
         return hist
-        
+
 
 def numerical_grad_check(f, x, key):
     """ Numerical Gradient Checker """
@@ -229,23 +307,23 @@ def numerical_grad_check(f, x, key):
     cost, grad = f(x)
     grad = grad[key]
     it = np.nditer(x, flags=['multi_index'])
-    while not it.finished:    
-        dim = it.multi_index    
+    while not it.finished:
+        dim = it.multi_index
         print(dim)
         tmp = x[dim]
         x[dim] = tmp + h
         cplus, _ = f(x)
-        x[dim] = tmp - h 
+        x[dim] = tmp - h
         cminus, _ = f(x)
         x[dim] = tmp
-        num_grad = (cplus-cminus)/(2*h)
+        num_grad = (cplus - cminus) / (2 * h)
         # print('cplus cminus', cplus, cminus, cplus-cminus)
         # print('dim, grad, num_grad, grad-num_grad', dim, grad[dim], num_grad, grad[dim]-num_grad)
         assert np.abs(num_grad - grad[dim]) < eps, 'numerical gradient error index {0}, numerical gradient {1}, computed gradient {2}'.format(dim, num_grad, grad[dim])
         it.iternext()
 
 def test_grad():
-    stars = '*'*5
+    stars = '*' * 5
     print(stars, 'Testing  Cost and Gradient Together')
     input_dim = 7
     hidden_size = 1
@@ -261,18 +339,19 @@ def test_grad():
     print('\n', stars, 'Test Cost and Gradient of b2', stars)
     numerical_grad_check(f, params['b2'], 'd_b2')
     print(stars, 'Test Success', stars)
-    
+
     print('\n', stars, 'Test Cost and Gradient of w2', stars)
     numerical_grad_check(f, params['W2'], 'd_w2')
     print('Test Success')
-    
+
     print('\n', stars, 'Test Cost and Gradient of b1', stars)
     numerical_grad_check(f, params['b1'], 'd_b1')
     print('Test Success')
-    
+
     print('\n', stars, 'Test Cost and Gradient of w1', stars)
     numerical_grad_check(f, params['W1'], 'd_w1')
     print('Test Success')
+
 
 if __name__ == '__main__':
     input_dim = 3
