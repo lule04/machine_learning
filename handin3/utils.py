@@ -1,15 +1,18 @@
 import numpy as np
 import torch
 
+
 def torch_onehot(labels, n_classes):
     onehot_labels = torch.zeros((len(labels), n_classes))
     onehot_labels[torch.arange(len(labels)), labels] = 1
     return onehot_labels
 
+
 def np_onehot(labels, n_classes):
     onehot_labels = np.zeros((len(labels), n_classes))
     onehot_labels[np.arange(len(labels)), labels] = 1
     return onehot_labels
+
 
 def running_mean(vals, steps=30):
     means = np.zeros_like(vals)
@@ -19,6 +22,7 @@ def running_mean(vals, steps=30):
         else:
             means[i] = np.mean(vals[i-steps:i])
     return means
+
 
 def cross_entropy(pred, target):
     """
@@ -37,6 +41,7 @@ def cross_entropy(pred, target):
         raise ValueError('X-Entropy loss requires torch tensors for input')
 
     ### YOUR CODE HERE
+    mean_log_likelihoods = -torch.sum(torch.multiply(pred, target))/pred.shape[0]
     ### END CODE
 
     return mean_log_likelihoods
