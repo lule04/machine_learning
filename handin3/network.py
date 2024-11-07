@@ -14,6 +14,7 @@ from get_data import \
         NUM_CLASSES_DICT
 from network_training import train
 
+
 class Net(nn.Module):
     """
     Neural network model that can pre-train on one image dataset and then finetune onto another image dataset.
@@ -45,6 +46,18 @@ class Net(nn.Module):
         We recommend using torch.nn.functional (F.) for max pooling and relu
         """
         ### YOUR CODE HERE
+        # First layer
+        x = self.conv1(x)                   # - convolution on the features
+        x = F.max_pool2d(x, kernel_size=2)  # - 2x2 max_pool on the conv output (with stride 2)
+        x = F.relu(x)                       # - relu activation
+
+        # Second layer
+        x = self.conv2(x)                   # - convolution on the features
+        # x = F.dropout2d(x, 0.2)           # - apply convolutional dropout for improving performance
+                                            #   Edit: now commented, because it did not help ...
+        x = F.max_pool2d(x, kernel_size=2)  # - 2x2 max_pool on the conv output (with stride 2)
+        x = F.relu(x)                       # - relu activation
+        # Documentation of torch.nn.functional was really helpful: https://pytorch.org/docs/stable/nn.functional.html
         ### END CODE
 
         # Reshape the conv outputs so that we can apply linear layers to them
@@ -58,6 +71,8 @@ class Net(nn.Module):
         We first extract the convolutional features and then apply the generalization head onto those.
         """
         ### YOUR CODE HERE
+        x = self.apply_convs(x)
+        x = self.generalizer(x)
         ### END CODE
 
         # Note: we use LOG SOFTMAX here, rather than just softmax.
@@ -70,12 +85,13 @@ class Net(nn.Module):
         We first extract the convolutional features and then apply the pretraining head onto those.
         """
         ### YOUR CODE HERE
+        x = self.apply_convs(x)
+        x = self.pretrainer(x)
         ### END CODE
 
         # Note: we use LOG SOFTMAX here, rather than just softmax.
         # This must be consistent with the cross_entropy implementation
         return F.log_softmax(x, dim=-1)
-
 
 
 def test_network(n_samples=1, n_batches=500, minimum_acc=0.9, maximum_loss=0.05, data_str='mnist'):
