@@ -19,17 +19,15 @@ def collage(batch_i, batch_j):
     
     ### YOUR CODE HERE
     half = im_size // 2
-    top_left_j = batch_j[:, :half, :half]
-    top_right_i = batch_i[:, :half, half:]
-    bottom_left_i = batch_i[:, half:, :half]
-    bottom_right_j = batch_j[:, half:, half:]
+    result = np.zeros_like(batch_i)
 
-    # Concatenate horizontally for top and bottom rows
-    top_row = np.concatenate((top_left_j, top_right_i), axis=1)
-    bottom_row = np.concatenate((bottom_left_i, bottom_right_j), axis=1)
+    # batch_j
+    result[:, :half, :half] = batch_j[:, :half, :half]  # top-left
+    result[:, half:, half:] = batch_j[:, half:, half:]  # bottom-right
 
-    # Concatenate vertically
-    result = np.concatenate((top_row, bottom_row), axis=0)
+    # batch_i
+    result[:, :half, half:] = batch_i[:, :half, half:]  # top-right
+    result[:, half:, :half] = batch_i[:, half:, :half]  # bottom-left
 
     interpolation = 0.5
     ### END CODE
@@ -53,8 +51,10 @@ def mixup(batch_i, batch_j, alpha=0.3):
 
     return result, interpolation
 
+
 def no_aug(batch_i, batch_j):
     return batch_i, 1
+
 
 AUGMENTATION_DICT = {
     'mixup': mixup,
