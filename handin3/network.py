@@ -53,8 +53,7 @@ class Net(nn.Module):
 
         # Second layer
         x = self.conv2(x)                   # - convolution on the features
-        # x = F.dropout2d(x, 0.2)           # - apply convolutional dropout for improving performance
-                                            #   Edit: now commented, because it did not help ...
+        x = self.conv2_drop(x)              # - apply convolutional dropout for improving performance
         x = F.max_pool2d(x, kernel_size=2)  # - 2x2 max_pool on the conv output (with stride 2)
         x = F.relu(x)                       # - relu activation
         # Documentation of torch.nn.functional was really helpful: https://pytorch.org/docs/stable/nn.functional.html
